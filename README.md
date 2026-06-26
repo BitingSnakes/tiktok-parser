@@ -157,6 +157,101 @@ Write hashtag search results to a custom output file:
 uv run python tiktok_hashtag_search.py data/tiktok-two.jl -o data/tiktok_hashtag_videos.jl
 ```
 
+## Scrape Instagram Reels
+
+Scrape Instagram Reels from public search discovery:
+
+```bash
+uv run python instagram_reels_search.py "ukraine news"
+```
+
+Scrape direct Instagram Reel URLs:
+
+```bash
+uv run python instagram_reels_search.py --url "https://www.instagram.com/reel/Ch74NvrD2UV/"
+```
+
+Write to a custom output file:
+
+```bash
+uv run python instagram_reels_search.py "ukraine news" -o data/instagram_reels.jl
+```
+
+Limit discovered Reels per query:
+
+```bash
+uv run python instagram_reels_search.py "ukraine news" --max-reels-per-query 10
+```
+
+Instagram keyword discovery uses a text mirror of public search results, then follows discovered Reel URLs and extracts Open Graph metadata. Direct Reel URLs and account scraping are also supported.
+
+## Scrape Instagram Accounts
+
+Scrape Reels/video nodes from one account:
+
+```bash
+uv run python instagram_account_scraper.py instagram
+```
+
+Scrape multiple accounts:
+
+```bash
+uv run python instagram_account_scraper.py instagram natgeo
+```
+
+Handles and profile URLs are also accepted:
+
+```bash
+uv run python instagram_account_scraper.py @instagram "https://www.instagram.com/natgeo/"
+```
+
+Limit Reels per account:
+
+```bash
+uv run python instagram_account_scraper.py instagram --max-reels-per-account 25
+```
+
+Write to a custom output file:
+
+```bash
+uv run python instagram_account_scraper.py instagram -o data/instagram_account_reels.jl
+```
+
+Read accounts from stdin:
+
+```bash
+printf '%s\n' instagram natgeo \
+  | uv run python instagram_account_scraper.py
+```
+
+## Search Instagram From Existing Hashtags
+
+Extract hashtags from an existing JSON Lines scrape and use them as Instagram Reel search queries:
+
+```bash
+uv run python instagram_hashtag_search.py data/tiktok-two.jl
+```
+
+Preview extracted hashtags without scraping:
+
+```bash
+uv run python instagram_hashtag_search.py data/tiktok-two.jl --dry-run
+```
+
+Limit hashtags and Reels per hashtag:
+
+```bash
+uv run python instagram_hashtag_search.py data/tiktok-two.jl \
+  --max-tags 20 \
+  --max-reels-per-tag 5
+```
+
+Write hashtag search results to a custom output file:
+
+```bash
+uv run python instagram_hashtag_search.py data/tiktok-two.jl -o data/instagram_hashtag_reels.jl
+```
+
 ## Output
 
 Outputs are JSON Lines files. Each line is one video record with fields like:
@@ -181,4 +276,7 @@ Default output paths:
 ```text
 data/tiktok_videos.jl
 data/tiktok_account_videos.jl
+data/instagram_reels.jl
+data/instagram_account_reels.jl
+data/instagram_hashtag_reels.jl
 ```
