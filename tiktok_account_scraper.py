@@ -34,7 +34,9 @@ MAX_EMPTY_PAGES = 2
 def _read_lines_from_stdin() -> list[str]:
     if sys.stdin.isatty():
         return []
-    return [line.strip() for line in sys.stdin if line.strip() and not line.startswith("#")]
+    return [
+        line.strip() for line in sys.stdin if line.strip() and not line.startswith("#")
+    ]
 
 
 def _normalize_account(value: str) -> str:
@@ -88,24 +90,21 @@ def _find_sec_uid(data: dict[str, Any], account: str) -> str | None:
     for candidate in _walk(data):
         user = candidate.get("user")
         if isinstance(user, dict):
-            if (
-                str(user.get("uniqueId", "")).lower() == account.lower()
-                and user.get("secUid")
+            if str(user.get("uniqueId", "")).lower() == account.lower() and user.get(
+                "secUid"
             ):
                 return str(user["secUid"])
 
         author = candidate.get("author")
         if isinstance(author, dict):
-            if (
-                str(author.get("uniqueId", "")).lower() == account.lower()
-                and author.get("secUid")
-            ):
+            if str(
+                author.get("uniqueId", "")
+            ).lower() == account.lower() and author.get("secUid"):
                 return str(author["secUid"])
 
-        if (
-            str(candidate.get("uniqueId", "")).lower() == account.lower()
-            and candidate.get("secUid")
-        ):
+        if str(
+            candidate.get("uniqueId", "")
+        ).lower() == account.lower() and candidate.get("secUid"):
             return str(candidate["secUid"])
 
     return None
@@ -114,7 +113,7 @@ def _find_sec_uid(data: dict[str, Any], account: str) -> str | None:
 def _json_response(response: Response) -> dict[str, Any] | None:
     try:
         payload = json.loads(response.text)
-    except (AttributeError, json.JSONDecodeError):
+    except AttributeError, json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None
 
@@ -172,7 +171,9 @@ class TikTokAccountSpider(Spider):
 
         if found_sec_uid and not self._account_limit_reached(account):
             yield Request(
-                url=_tiktok_profile_feed_url(found_sec_uid, cursor=0, count=self.page_size),
+                url=_tiktok_profile_feed_url(
+                    found_sec_uid, cursor=0, count=self.page_size
+                ),
                 callback=self.parse_tiktok_feed,
                 headers={"referer": _profile_url(account)},
                 meta={
@@ -211,7 +212,11 @@ class TikTokAccountSpider(Spider):
         empty_pages = _as_int(response.request.meta.get("empty_pages")) or 0
         payload = _json_response(response)
         if payload is None:
-            self.log.warning("TikTok profile feed returned non-JSON response", account=account, url=response.url)
+            self.log.warning(
+                "TikTok profile feed returned non-JSON response",
+                account=account,
+                url=response.url,
+            )
             yield Request(
                 url=_tikwm_user_posts_url(account, cursor=0, count=self.page_size),
                 callback=self.parse_tikwm_posts,
@@ -244,7 +249,9 @@ class TikTokAccountSpider(Spider):
             and not self._account_limit_reached(account)
         ):
             yield Request(
-                url=_tiktok_profile_feed_url(sec_uid, cursor=next_cursor, count=self.page_size),
+                url=_tiktok_profile_feed_url(
+                    sec_uid, cursor=next_cursor, count=self.page_size
+                ),
                 callback=self.parse_tiktok_feed,
                 headers={"referer": _profile_url(account)},
                 meta={
@@ -260,7 +267,11 @@ class TikTokAccountSpider(Spider):
         cursor = _as_int(response.request.meta.get("cursor")) or 0
         payload = _json_response(response)
         if payload is None:
-            self.log.warning("Tikwm fallback returned non-JSON response", account=account, url=response.url)
+            self.log.warning(
+                "Tikwm fallback returned non-JSON response",
+                account=account,
+                url=response.url,
+            )
             return
 
         if payload.get("code") != 0:
@@ -270,11 +281,19 @@ class TikTokAccountSpider(Spider):
                 yield Request(
                     url=response.url,
                     callback=self.parse_tikwm_posts,
-                    meta={"account": account, "cursor": cursor, "tikwm_retries": retries + 1},
+                    meta={
+                        "account": account,
+                        "cursor": cursor,
+                        "tikwm_retries": retries + 1,
+                    },
                     dont_filter=True,
                 )
                 return
-            self.log.warning("Tikwm fallback did not return videos", account=account, message=payload.get("msg"))
+            self.log.warning(
+                "Tikwm fallback did not return videos",
+                account=account,
+                message=payload.get("msg"),
+            )
             return
 
         videos = _get_path(payload, "data", "videos") or []
@@ -285,22 +304,34 @@ class TikTokAccountSpider(Spider):
                 continue
             saw_video = True
             normalized = _normalize_tikwm_video(video, None)
-            if self._claim_video(account, normalized.get("id"), normalized.get("source_url")):
+            if self._claim_video(
+                account, normalized.get("id"), normalized.get("source_url")
+            ):
                 yielded += 1
                 yield normalized
                 if self._account_limit_reached(account):
                     return
 
         next_cursor = _as_int(_get_path(payload, "data", "cursor")) or 0
-        has_more = _get_path(payload, "data", "hasMore") in (1, True, "1", "true", "True")
+        has_more = _get_path(payload, "data", "hasMore") in (
+            1,
+            True,
+            "1",
+            "true",
+            "True",
+        )
         if has_more and next_cursor and next_cursor != cursor and saw_video:
             yield Request(
-                url=_tikwm_user_posts_url(account, cursor=next_cursor, count=self.page_size),
+                url=_tikwm_user_posts_url(
+                    account, cursor=next_cursor, count=self.page_size
+                ),
                 callback=self.parse_tikwm_posts,
                 meta={"account": account, "cursor": next_cursor, "tikwm_retries": 0},
             )
 
-    async def _yield_tiktok_item(self, account: str, item: dict[str, Any], source_url: str):
+    async def _yield_tiktok_item(
+        self, account: str, item: dict[str, Any], source_url: str
+    ):
         video = _normalize_video(item, _video_url_from_item(item) or source_url)
         if not self._claim_video(account, video.get("id"), video.get("source_url")):
             return
@@ -390,7 +421,9 @@ def main() -> None:
         accounts = list(DEFAULT_ACCOUNTS)
 
     if not accounts:
-        raise SystemExit("Provide at least one TikTok account, @handle, or profile URL.")
+        raise SystemExit(
+            "Provide at least one TikTok account, @handle, or profile URL."
+        )
 
     run_spider(
         TikTokAccountSpider,

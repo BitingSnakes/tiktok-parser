@@ -5,7 +5,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-from silkworm import run_spider
+from silkworm import Request, run_spider
 from silkworm.middlewares import (
     DelayMiddleware,
     RetryMiddleware,
@@ -13,11 +13,28 @@ from silkworm.middlewares import (
 )
 from silkworm.pipelines import JsonLinesPipeline
 
-from tiktok_keyword_search import DESKTOP_USER_AGENT, TikTokVideoSpider
+from tiktok_keyword_search import (
+    DESKTOP_USER_AGENT,
+    TikTokVideoSpider,
+    _tikwm_search_url,
+)
 
 
 DEFAULT_INPUT = "data/tiktok-two.jl"
 DEFAULT_OUTPUT = "data/tiktok_hashtag_videos.jl"
+DEFAULT_TIKWM_DELAY = 1.25
+
+
+class TikTokHashtagSpider(TikTokVideoSpider):
+    name = "tiktok_hashtag_videos"
+
+    async def start_requests(self):
+        for query in self.queries:
+            yield Request(
+                url=_tikwm_search_url(query, self.max_videos_per_query or 25),
+                callback=self.parse_tikwm_search,
+                meta={"query": query, "tikwm_retries": 0},
+            )
 
 
 def _clean_hashtag(value: Any) -> str | None:
@@ -40,7 +57,9 @@ def extract_hashtag_queries(path: str | Path) -> list[str]:
             try:
                 item = json.loads(line)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON on line {line_number} of {path}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid JSON on line {line_number} of {path}: {exc}"
+                ) from exc
 
             if not isinstance(item, dict):
                 continue
@@ -95,16 +114,25 @@ def parse_args() -> argparse.Namespace:
         help="Maximum discovered videos to follow from each hashtag search. Defaults to 25.",
     )
     parser.add_argument(
+        "--backend",
+        choices=("tikwm", "full"),
+        default="tikwm",
+        help=(
+            "Search backend. 'tikwm' is direct and avoids TikTok/DDG discovery stalls; "
+            "'full' uses the same cascade as tiktok_keyword_search.py. Defaults to tikwm."
+        ),
+    )
+    parser.add_argument(
         "--concurrency",
         type=int,
-        default=4,
-        help="Number of concurrent requests. Defaults to 4.",
+        default=1,
+        help="Number of concurrent requests. Defaults to 1 to respect Tikwm rate limits.",
     )
     parser.add_argument(
         "--delay",
         type=float,
-        default=1.0,
-        help="Delay between requests in seconds. Defaults to 1.0.",
+        default=DEFAULT_TIKWM_DELAY,
+        help=f"Delay between requests in seconds. Defaults to {DEFAULT_TIKWM_DELAY}.",
     )
     return parser.parse_args()
 
@@ -123,8 +151,10 @@ def main() -> None:
             print(query)
         return
 
+    spider_cls = TikTokHashtagSpider if args.backend == "tikwm" else TikTokVideoSpider
+
     run_spider(
-        TikTokVideoSpider,
+        spider_cls,
         queries=queries,
         max_videos_per_query=args.max_videos_per_tag,
         request_middlewares=[

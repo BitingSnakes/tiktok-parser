@@ -58,7 +58,7 @@ def _as_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -119,8 +119,12 @@ def _has_video_details(item: dict[str, Any]) -> bool:
     )
 
 
-def _find_item_struct(data: dict[str, Any], video_id: str | None) -> dict[str, Any] | None:
-    item = _get_path(data, "__DEFAULT_SCOPE__", "webapp.video-detail", "itemInfo", "itemStruct")
+def _find_item_struct(
+    data: dict[str, Any], video_id: str | None
+) -> dict[str, Any] | None:
+    item = _get_path(
+        data, "__DEFAULT_SCOPE__", "webapp.video-detail", "itemInfo", "itemStruct"
+    )
     if isinstance(item, dict) and _has_video_details(item):
         return item
 
@@ -143,9 +147,12 @@ def _find_item_struct(data: dict[str, Any], video_id: str | None) -> dict[str, A
             and _has_video_details(candidate["itemStruct"])
         ):
             return candidate["itemStruct"]
-        if video_id and str(candidate.get("id")) == video_id and (
-            "author" in candidate or "stats" in candidate or "video" in candidate
-        ) and _has_video_details(candidate):
+        if (
+            video_id
+            and str(candidate.get("id")) == video_id
+            and ("author" in candidate or "stats" in candidate or "video" in candidate)
+            and _has_video_details(candidate)
+        ):
             return candidate
 
     return None
@@ -233,14 +240,18 @@ def _extract_tiktok_video_urls(text: str) -> list[str]:
         target = unquote(encoded)
         if "tiktok.com" not in target:
             continue
-        urls.extend(_clean_video_url(url) for url in TIKTOK_VIDEO_HREF_RE.findall(target))
+        urls.extend(
+            _clean_video_url(url) for url in TIKTOK_VIDEO_HREF_RE.findall(target)
+        )
 
     # DuckDuckGo sometimes entity-encodes the entire redirect URL.
     for href in re.findall(r"href=[\"']([^\"']+)[\"']", decoded):
         parsed = urlparse(unescape(href))
         target = parse_qs(parsed.query).get("uddg", [None])[0]
         if target and "tiktok.com" in target:
-            urls.extend(_clean_video_url(url) for url in TIKTOK_VIDEO_HREF_RE.findall(target))
+            urls.extend(
+                _clean_video_url(url) for url in TIKTOK_VIDEO_HREF_RE.findall(target)
+            )
 
     return urls
 
@@ -261,9 +272,13 @@ def _normalize_video(item: dict[str, Any], source_url: str) -> dict[str, Any]:
         "author": {
             "id": _compact(author.get("id") if isinstance(author, dict) else None),
             "unique_id": _compact(_unique_id(author)),
-            "nickname": _compact(author.get("nickname") if isinstance(author, dict) else None),
+            "nickname": _compact(
+                author.get("nickname") if isinstance(author, dict) else None
+            ),
             "verified": author.get("verified") if isinstance(author, dict) else None,
-            "signature": _compact(author.get("signature") if isinstance(author, dict) else None),
+            "signature": _compact(
+                author.get("signature") if isinstance(author, dict) else None
+            ),
             "followers": _as_int(author_stats.get("followerCount")),
             "following": _as_int(author_stats.get("followingCount")),
             "likes": _as_int(author_stats.get("heartCount")),
@@ -316,7 +331,9 @@ def _normalize_tikwm_video(item: dict[str, Any], query: str | None) -> dict[str,
         "author": {
             "id": _compact(author.get("id") if isinstance(author, dict) else None),
             "unique_id": _compact(unique_id),
-            "nickname": _compact(author.get("nickname") if isinstance(author, dict) else None),
+            "nickname": _compact(
+                author.get("nickname") if isinstance(author, dict) else None
+            ),
             "verified": None,
             "signature": None,
             "followers": None,
@@ -341,11 +358,17 @@ def _normalize_tikwm_video(item: dict[str, Any], query: str | None) -> dict[str,
             "download_url": _compact(item.get("wmplay")),
         },
         "music": {
-            "id": _compact(music.get("id") if isinstance(music, dict) else item.get("music")),
+            "id": _compact(
+                music.get("id") if isinstance(music, dict) else item.get("music")
+            ),
             "title": _compact(music.get("title") if isinstance(music, dict) else None),
-            "author": _compact(music.get("author") if isinstance(music, dict) else None),
+            "author": _compact(
+                music.get("author") if isinstance(music, dict) else None
+            ),
             "original": music.get("original") if isinstance(music, dict) else None,
-            "play_url": _compact(music.get("play") if isinstance(music, dict) else None),
+            "play_url": _compact(
+                music.get("play") if isinstance(music, dict) else None
+            ),
         },
         "hashtags": re.findall(r"#([\wа-яА-ЯіїєґІЇЄҐ]+)", item.get("title") or ""),
         "metadata_source": "tikwm",
@@ -436,7 +459,11 @@ class TikTokVideoSpider(Spider):
             yield request
 
         if yielded == 0:
-            self.log.warning("No TikTok video links found on seed search page", query=query, url=response.url)
+            self.log.warning(
+                "No TikTok video links found on seed search page",
+                query=query,
+                url=response.url,
+            )
             yield Request(
                 url=_tikwm_search_url(
                     str(query),
@@ -451,7 +478,11 @@ class TikTokVideoSpider(Spider):
         try:
             payload = json.loads(response.text)
         except json.JSONDecodeError:
-            self.log.warning("Tikwm fallback returned non-JSON response", query=query, url=response.url)
+            self.log.warning(
+                "Tikwm fallback returned non-JSON response",
+                query=query,
+                url=response.url,
+            )
             return
 
         if payload.get("code") != 0:
@@ -465,7 +496,11 @@ class TikTokVideoSpider(Spider):
                     dont_filter=True,
                 )
                 return
-            self.log.warning("Tikwm fallback did not return videos", query=query, message=payload.get("msg"))
+            self.log.warning(
+                "Tikwm fallback did not return videos",
+                query=query,
+                message=payload.get("msg"),
+            )
             return
 
         videos = _get_path(payload, "data", "videos") or []
@@ -477,7 +512,10 @@ class TikTokVideoSpider(Spider):
         for video in videos:
             if not isinstance(video, dict):
                 continue
-            if self.max_videos_per_query is not None and yielded >= self.max_videos_per_query:
+            if (
+                self.max_videos_per_query is not None
+                and yielded >= self.max_videos_per_query
+            ):
                 break
             yielded += 1
             yield _normalize_tikwm_video(video, str(query) if query else None)
@@ -490,7 +528,10 @@ class TikTokVideoSpider(Spider):
             if url in seen:
                 continue
             seen.add(url)
-            if self.max_videos_per_query is not None and yielded >= self.max_videos_per_query:
+            if (
+                self.max_videos_per_query is not None
+                and yielded >= self.max_videos_per_query
+            ):
                 break
             yielded += 1
             yield Request(url=url, callback=self.parse_video, meta={"query": query})
@@ -514,7 +555,9 @@ class TikTokVideoSpider(Spider):
             "scraped_at": _utc_now(),
             "id": video_id,
             "title": await _meta_content(response, 'meta[property="og:title"]'),
-            "description": await _meta_content(response, 'meta[property="og:description"]'),
+            "description": await _meta_content(
+                response, 'meta[property="og:description"]'
+            ),
             "image": await _meta_content(response, 'meta[property="og:image"]'),
             "canonical_url": (
                 link.attr("href")
@@ -531,7 +574,9 @@ class TikTokVideoSpider(Spider):
 def _read_lines_from_stdin() -> list[str]:
     if sys.stdin.isatty():
         return []
-    return [line.strip() for line in sys.stdin if line.strip() and not line.startswith("#")]
+    return [
+        line.strip() for line in sys.stdin if line.strip() and not line.startswith("#")
+    ]
 
 
 def _looks_like_url(value: str) -> bool:

@@ -125,6 +125,8 @@ Extract hashtags from an existing JSON Lines scrape and use them as TikTok searc
 uv run python tiktok_hashtag_search.py data/tiktok-two.jl
 ```
 
+By default this uses the Tikwm search fallback directly with one request at a time, which avoids TikTok search-page discovery stalls.
+
 Preview extracted hashtags without scraping:
 
 ```bash
@@ -141,6 +143,12 @@ Limit videos per hashtag:
 
 ```bash
 uv run python tiktok_hashtag_search.py data/tiktok-two.jl --max-videos-per-tag 10
+```
+
+Use the full TikTok search cascade from `tiktok_keyword_search.py`:
+
+```bash
+uv run python tiktok_hashtag_search.py data/tiktok-two.jl --backend full
 ```
 
 Write hashtag search results to a custom output file:
