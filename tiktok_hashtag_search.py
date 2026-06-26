@@ -1,0 +1,148 @@
+import argparse
+import json
+import sys
+from collections import OrderedDict
+from pathlib import Path
+from typing import Any
+
+from silkworm import run_spider
+from silkworm.middlewares import (
+    DelayMiddleware,
+    RetryMiddleware,
+    UserAgentMiddleware,
+)
+from silkworm.pipelines import JsonLinesPipeline
+
+from tiktok_keyword_search import DESKTOP_USER_AGENT, TikTokVideoSpider
+
+
+DEFAULT_INPUT = "data/tiktok-two.jl"
+DEFAULT_OUTPUT = "data/tiktok_hashtag_videos.jl"
+
+
+def _clean_hashtag(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+
+    tag = value.strip().lstrip("#").strip()
+    return tag or None
+
+
+def extract_hashtag_queries(path: str | Path) -> list[str]:
+    queries: OrderedDict[str, str] = OrderedDict()
+
+    with Path(path).open(encoding="utf-8") as input_file:
+        for line_number, line in enumerate(input_file, start=1):
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSON on line {line_number} of {path}: {exc}") from exc
+
+            if not isinstance(item, dict):
+                continue
+
+            hashtags = item.get("hashtags")
+            if not isinstance(hashtags, list):
+                continue
+
+            for value in hashtags:
+                tag = _clean_hashtag(value)
+                if tag is None:
+                    continue
+                queries.setdefault(tag.casefold(), tag)
+
+    return list(queries.values())
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read TikTok JSONL output, extract hashtags, and search TikTok "
+            "for more videos using those hashtags."
+        )
+    )
+    parser.add_argument(
+        "input",
+        nargs="?",
+        default=DEFAULT_INPUT,
+        help=f"Input JSON Lines file. Defaults to {DEFAULT_INPUT}.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=DEFAULT_OUTPUT,
+        help=f"JSON Lines output path. Defaults to {DEFAULT_OUTPUT}.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print extracted hashtags and exit without scraping.",
+    )
+    parser.add_argument(
+        "--max-tags",
+        type=int,
+        default=None,
+        help="Optional cap on number of extracted hashtags to search.",
+    )
+    parser.add_argument(
+        "--max-videos-per-tag",
+        type=int,
+        default=25,
+        help="Maximum discovered videos to follow from each hashtag search. Defaults to 25.",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        help="Number of concurrent requests. Defaults to 4.",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=1.0,
+        help="Delay between requests in seconds. Defaults to 1.0.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    queries = extract_hashtag_queries(args.input)
+    if args.max_tags is not None:
+        queries = queries[: args.max_tags]
+
+    if not queries:
+        raise SystemExit(f"No hashtags found in {args.input}.")
+
+    if args.dry_run:
+        for query in queries:
+            print(query)
+        return
+
+    run_spider(
+        TikTokVideoSpider,
+        queries=queries,
+        max_videos_per_query=args.max_videos_per_tag,
+        request_middlewares=[
+            UserAgentMiddleware(default=DESKTOP_USER_AGENT),
+            DelayMiddleware(delay=args.delay),
+        ],
+        response_middlewares=[
+            RetryMiddleware(max_times=3, sleep_http_codes=[429, 503]),
+        ],
+        item_pipelines=[JsonLinesPipeline(args.output)],
+        concurrency=args.concurrency,
+        request_timeout=20,
+        log_stats_interval=30,
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except BrokenPipeError:
+        sys.exit(1)
