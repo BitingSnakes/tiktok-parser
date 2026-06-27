@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -20,9 +21,41 @@ from tiktok_keyword_search import (
 )
 
 
-DEFAULT_INPUT = "data/tiktok-two.jl"
 DEFAULT_OUTPUT = "data/tiktok_hashtag_videos.jl"
 DEFAULT_TIKWM_DELAY = 1.25
+DEFAULT_UKRAINIAN_HASHTAGS = (
+    "україна",
+    "украина",
+    "новини",
+    "новиниукраїни",
+    "київ",
+    "киев",
+    "війна",
+    "війнавукраїні",
+    "зсу",
+    "зсуукраїни",
+    "славаукраїні",
+    "українськамова",
+    "харків",
+    "одеса",
+    "дніпро",
+    "львів",
+    "запоріжжя",
+    "херсон",
+    "миколаїв",
+    "донбас",
+    "крим",
+    "фронт",
+    "ппо",
+    "ракети",
+    "дрони",
+    "бпла",
+    "тривога",
+    "повітрянатривога",
+    "енергетика",
+    "світло",
+)
+UKRAINIAN_TAG_RE = re.compile(r"[а-яА-ЯіїєґІЇЄҐ]")
 
 
 class TikTokHashtagSpider(TikTokVideoSpider):
@@ -45,7 +78,11 @@ def _clean_hashtag(value: Any) -> str | None:
     return tag or None
 
 
-def extract_hashtag_queries(path: str | Path) -> list[str]:
+def _looks_ukrainian_tag(tag: str) -> bool:
+    return bool(UKRAINIAN_TAG_RE.search(tag))
+
+
+def extract_hashtag_queries(path: str | Path, *, ukrainian_only: bool = True) -> list[str]:
     queries: OrderedDict[str, str] = OrderedDict()
 
     with Path(path).open(encoding="utf-8") as input_file:
@@ -72,8 +109,20 @@ def extract_hashtag_queries(path: str | Path) -> list[str]:
                 tag = _clean_hashtag(value)
                 if tag is None:
                     continue
+                if ukrainian_only and not _looks_ukrainian_tag(tag):
+                    continue
                 queries.setdefault(tag.casefold(), tag)
 
+    return list(queries.values())
+
+
+def _dedupe_tags(values: list[str] | tuple[str, ...]) -> list[str]:
+    queries: OrderedDict[str, str] = OrderedDict()
+    for value in values:
+        tag = _clean_hashtag(value)
+        if tag is None:
+            continue
+        queries.setdefault(tag.casefold(), tag)
     return list(queries.values())
 
 
@@ -87,8 +136,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "input",
         nargs="?",
-        default=DEFAULT_INPUT,
-        help=f"Input JSON Lines file. Defaults to {DEFAULT_INPUT}.",
+        default=None,
+        help=(
+            "Optional input JSON Lines file to extract hashtags from. "
+            "If omitted, searches a built-in Ukrainian hashtag set."
+        ),
     )
     parser.add_argument(
         "-o",
@@ -100,6 +152,23 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Print extracted hashtags and exit without scraping.",
+    )
+    parser.add_argument(
+        "--ukrainian-tags",
+        action="store_true",
+        help="Use the built-in Ukrainian hashtag set even when an input file is provided.",
+    )
+    parser.add_argument(
+        "--all-file-tags",
+        action="store_true",
+        help="When reading an input file, search all extracted hashtags instead of only Ukrainian-looking tags.",
+    )
+    parser.add_argument(
+        "--tag",
+        dest="extra_tags",
+        action="append",
+        default=[],
+        help="Additional hashtag to search. Can be passed more than once.",
     )
     parser.add_argument(
         "--max-tags",
@@ -139,12 +208,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    queries = extract_hashtag_queries(args.input)
+    queries: list[str] = []
+    if args.input:
+        queries.extend(
+            extract_hashtag_queries(args.input, ukrainian_only=not args.all_file_tags)
+        )
+    if not args.input or args.ukrainian_tags:
+        queries.extend(DEFAULT_UKRAINIAN_HASHTAGS)
+    queries.extend(args.extra_tags)
+    queries = _dedupe_tags(queries)
+
     if args.max_tags is not None:
         queries = queries[: args.max_tags]
 
     if not queries:
-        raise SystemExit(f"No hashtags found in {args.input}.")
+        raise SystemExit("No hashtags found.")
 
     if args.dry_run:
         for query in queries:

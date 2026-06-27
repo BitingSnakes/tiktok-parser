@@ -119,11 +119,25 @@ uv run python tiktok_account_scraper.py --help
 
 ## Search From Existing Hashtags
 
+Search a built-in Ukrainian hashtag set:
+
+```bash
+uv run python tiktok_hashtag_search.py
+```
+
+Preview the Ukrainian hashtags without scraping:
+
+```bash
+uv run python tiktok_hashtag_search.py --dry-run
+```
+
 Extract hashtags from an existing JSON Lines scrape and use them as TikTok search queries:
 
 ```bash
 uv run python tiktok_hashtag_search.py data/tiktok-two.jl
 ```
+
+When an input file is provided, only Ukrainian-looking hashtags are searched by default.
 
 By default this uses the Tikwm search fallback directly with one request at a time, which avoids TikTok search-page discovery stalls.
 
@@ -131,6 +145,24 @@ Preview extracted hashtags without scraping:
 
 ```bash
 uv run python tiktok_hashtag_search.py data/tiktok-two.jl --dry-run
+```
+
+Search every hashtag from an input file, including non-Ukrainian tags:
+
+```bash
+uv run python tiktok_hashtag_search.py data/tiktok-two.jl --all-file-tags
+```
+
+Combine an input file with the built-in Ukrainian hashtag set:
+
+```bash
+uv run python tiktok_hashtag_search.py data/tiktok-two.jl --ukrainian-tags
+```
+
+Add custom tags:
+
+```bash
+uv run python tiktok_hashtag_search.py --tag київ --tag зсу
 ```
 
 Limit how many hashtags are searched:
